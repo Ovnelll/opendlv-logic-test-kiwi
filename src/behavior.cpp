@@ -15,6 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "cluon-complete.hpp"
 #include "behavior.hpp"
 
 Behavior::Behavior() noexcept:
@@ -30,6 +31,8 @@ Behavior::Behavior() noexcept:
   m_rightIrReadingMutex{},
   m_groundSteeringAngleRequestMutex{},
   m_pedalPositionRequestMutex{}
+
+  cluon::data::TimeStamp startTime = cluon::time::now();
 {
 }
 
@@ -92,27 +95,24 @@ void Behavior::step() noexcept
   float rearDistance = rearUltrasonicReading.distance();
   double leftDistance = convertIrVoltageToDistance(leftIrReading.voltage());
   double rightDistance = convertIrVoltageToDistance(rightIrReading.voltage());
+  
+  int64_t startTimeUs = cluon::time::toMicroseconds([startTime]);
+  cluon::data::TimeStamp currentTime = cluon::time::now();
+  int64_t currentTimeUs = cluon::time::toMicroseconds(currentTime);
 
-  float pedalPosition = 0.2f;
-  float groundSteeringAngle = 0.3f;
-  if (frontDistance < 0.3f) {
-    pedalPosition = 0.0f;
+  float pedalPosition = 0f;
+  float groundSteeringAngle = 0f;
+  
+  if ((currentTimeUs - startTimeUs) <= 3f) {
+    pedalPosition = (currentTimeUs - startTimeUs) / 6f;
+    groundSteeringAngle = (currentTimeUs - startTimeUs) / 6f / 0.12f;
   } else {
-    if (rearDistance < 0.3f) {
-      pedalPosition = 0.4f;
+    if ((currentTimeUs - startTimeUs) <= 10f) {
+      pedalPosition = 1f / 2f - 3f / 20f + (currentTimeUs - startTimeUs) / 20f;
+      groundSteeringAngle = ( 1f / 2f + 3f / 20f - (currentTimeUs - startTimeUs) / 20f ) / 0.12f;
     }
   }
-
-  if (leftDistance < rightDistance) {
-    if (leftDistance < 0.2f) {
-      groundSteeringAngle = 0.2f;
-    }
-  } else {
-    if (rightDistance < 0.2f) {
-      groundSteeringAngle = 0.2f;
-    }
-  }
-
+  
   {
     std::lock_guard<std::mutex> lock1(m_groundSteeringAngleRequestMutex);
     std::lock_guard<std::mutex> lock2(m_pedalPositionRequestMutex);
